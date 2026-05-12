@@ -1,0 +1,143 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Prospector Pro</title>
+<style>
+  * { margin: 0; padding: 0; box-sizing: border-box; }
+  body { background: #0a0a0f; color: #e8e8f0; font-family: sans-serif; min-height: 100vh; padding: 24px; }
+  h1 { color: #00ff88; font-size: 24px; margin-bottom: 24px; }
+  .card { background: #12121a; border: 1px solid #1e1e2e; border-radius: 12px; padding: 24px; margin-bottom: 24px; }
+  input, select { width: 100%; background: #0a0a0f; border: 1px solid #1e1e2e; border-radius: 8px; padding: 12px; color: #e8e8f0; font-size: 14px; margin-bottom: 12px; }
+  label { font-size: 12px; color: #6b6b80; display: block; margin-bottom: 4px; }
+  button { width: 100%; padding: 14px; background: #00ff88; color: #000; border: none; border-radius: 8px; font-size: 15px; font-weight: 700; cursor: pointer; }
+  button:disabled { opacity: 0.5; }
+  .status { padding: 12px; border-radius: 8px; margin-bottom: 16px; display: none; }
+  .status.loading { display: block; background: rgba(0,200,255,0.1); color: #00c8ff; border: 1px solid rgba(0,200,255,0.2); }
+  .status.error { display: block; background: rgba(255,68,102,0.1); color: #ff4466; border: 1px solid rgba(255,68,102,0.2); }
+  .results-header { display: none; justify-content: space-between; align-items: center; margin-bottom: 12px; }
+  .export-btn { width: auto; padding: 8px 16px; font-size: 13px; background: transparent; border: 1px solid #00ff88; color: #00ff88; border-radius: 8px; }
+  table { width: 100%; border-collapse: collapse; background: #12121a; border-radius: 12px; overflow: hidden; display: none; }
+  th { padding: 12px; text-align: left; font-size: 11px; color: #6b6b80; border-bottom: 1px solid #1e1e2e; }
+  td { padding: 12px; font-size: 13px; border-bottom: 1px solid #1e1e2e; }
+  tr:last-child td { border-bottom: none; }
+  a.phone { color: #00ff88; text-decoration: none; }
+  .sem-site { color: #ff4466; font-size: 11px; }
+</style>
+</head>
+<body>
+<h1>📍 Prospector Pro</h1>
+
+<div class="card">
+  <div>
+    <label>Categoria</label>
+    <input type="text" id="categoria" placeholder="ex: salão de beleza" />
+  </div>
+  <div>
+    <label>Cidade</label>
+    <input type="text" id="cidade" placeholder="ex: Curitiba PR" />
+  </div>
+  <div>
+    <label>Quantidade</label>
+    <select id="limite">
+      <option value="20">20 empresas</option>
+      <option value="50" selected>50 empresas</option>
+      <option value="100">100 empresas</option>
+    </select>
+  </div>
+  <button id="btn" onclick="buscar()">🔍 Buscar Empresas</button>
+</div>
+
+<div class="status" id="status"></div>
+
+<div class="results-header" id="header">
+  <span id="total"></span>
+  <button class="export-btn" onclick="exportar()">⬇️ Exportar CSV</button>
+</div>
+
+<table id="tabela">
+  <thead>
+    <tr>
+      <th>#</th><th>Nome</th><th>Telefone</th><th>Site</th><th>Avaliação</th>
+    </tr>
+  </thead>
+  <tbody id="tbody"></tbody>
+</table>
+
+<script>
+let dados = [];
+
+async function buscar() {
+  const categoria = document.getElementById('categoria').value.trim();
+  const cidade = document.getElementById('cidade').value.trim();
+  const limite = parseInt(document.getElementById('limite').value);
+  if (!categoria || !cidade) { alert('Preencha categoria e cidade!'); return; }
+
+  const btn = document.getElementById('btn');
+  btn.disabled = true;
+  btn.textContent = 'Buscando...';
+  mostrarStatus('loading', 'Buscando empresas... aguarde 1-2 minutos ⏳');
+  document.getElementById('tabela').style.display = 'none';
+  document.getElementById('header').style.display = 'none';
+
+  try {
+    const resp = await fetch('/buscar', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ query: `${categoria} em ${cidade} Brasil`, limite })
+    });
+    const items = await resp.json();
+    if (!items || items.length === 0) { mostrarStatus('error', 'Nenhuma empresa encontrada.'); return; }
+    dados = items;
+    renderizar(items);
+    document.getElementById('status').style.display = 'none';
+  } catch(e) {
+    mostrarStatus('error', 'Erro de conexão. Tente novamente.');
+  } finally {
+    btn.disabled = false;
+    btn.textContent = '🔍 Buscar Empresas';
+  }
+}
+
+function renderizar(items) {
+  const tbody = document.getElementById('tbody');
+  tbody.innerHTML = '';
+  items.forEach((item, i) => {
+    const nome = item.title || '—';
+    const tel = item.phone || item.phoneUnformatted || null;
+    const site = item.website || null;
+    const rating = item.totalScore || '—';
+    const tr = document.createElement('tr');
+    tr.innerHTML = `
+      <td>${i+1}</td>
+      <td>${nome}${!site ? ' <span class="sem-site">sem site</span>' : ''}</td>
+      <td>${tel ? `<a class="phone" href="https://wa.me/55${tel.replace(/\D/g,'')}">${tel}</a>` : '—'}</td>
+      <td>${site ? `<a href="${site}" target="_blank" style="color:#00c8ff;font-size:12px">ver site</a>` : '—'}</td>
+      <td>${rating ? '⭐ '+rating : '—'}</td>
+    `;
+    tbody.appendChild(tr);
+  });
+  document.getElementById('total').textContent = `${items.length} empresas encontradas`;
+  document.getElementById('header').style.display = 'flex';
+  document.getElementById('tabela').style.display = 'table';
+}
+
+function exportar() {
+  const linhas = [['Nome','Telefone','Site','Avaliação']];
+  dados.forEach(i => linhas.push([i.title||'', i.phone||'', i.website||'', i.totalScore||'']));
+  const csv = linhas.map(l => l.map(c => `"${c}"`).join(',')).join('\n');
+  const a = document.createElement('a');
+  a.href = 'data:text/csv;charset=utf-8,\uFEFF' + encodeURIComponent(csv);
+  a.download = 'prospector.csv';
+  a.click();
+}
+
+function mostrarStatus(tipo, msg) {
+  const s = document.getElementById('status');
+  s.className = 'status ' + tipo;
+  s.textContent = msg;
+}
+</script>
+</body>
+</html>
