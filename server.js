@@ -14,7 +14,7 @@ app.post('/buscar', async (req, res) => {
   const { query, limite } = req.body;
   try {
     const runResp = await fetch(
-      `https://api.apify.com/v2/acts/compass~crawler-google-places/runs?token=${APIFY_TOKEN}`,
+      `https://api.apify.com/v2/acts/emastra~google-maps-scraper/runs?token=${APIFY_TOKEN}`,
       {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
